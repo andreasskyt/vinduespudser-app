@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tilbud – <%= tenant.name %></title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-50 min-h-screen py-8 px-4">
+  <div class="max-w-lg mx-auto">
+    <div class="bg-white rounded-xl shadow-lg p-6">
+      <h1 class="text-xl font-semibold text-slate-800 mb-2">Tak, <%= customer_name %>!</h1>
+      <p class="text-slate-600 mb-6">Her er dit tilbud fra <%= tenant.name %>.</p>
+
+      <div class="border border-slate-200 rounded-lg p-4 mb-6 bg-slate-50">
+        <div class="text-3xl font-bold text-slate-800 mb-2">
+          <%= quote.final_price %> kr.
+        </div>
+        <p class="text-slate-600 text-sm">
+          Estimeret antal vinduer: <%= quote.estimated_windows %> · <%= quote.frequency %>
+        </p>
+        <p class="text-slate-500 text-sm mt-1">
+          <%= address %>
+        </p>
+      </div>
+
+      <div class="prose prose-slate text-slate-700 text-sm whitespace-pre-wrap"><%- quote.rendered.replace(/\n/g, '<br>') %></div>
+
+      <p class="mt-6 text-slate-500 text-sm">
+        <%= tenant.name %> vil kontakte dig på den angivne email eller telefon.
+      </p>
+    </div>
+  </div>
+</body>
+</html>

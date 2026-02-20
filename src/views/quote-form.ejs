@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tilbud – <%= tenant.name %></title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-50 min-h-screen py-8 px-4">
+  <div class="max-w-lg mx-auto">
+    <header class="text-center mb-8">
+      <h1 class="text-2xl font-semibold text-slate-800"><%= tenant.name %></h1>
+      <p class="text-slate-600 mt-1">Få et uforpligtende tilbud på vinduespudsning</p>
+    </header>
+
+    <form action="/<%= slug %>/submit" method="post" class="bg-white rounded-xl shadow-lg p-6 space-y-4">
+      <% if (typeof error !== 'undefined' && error) { %>
+        <div class="p-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-800 text-sm">
+          <%= error %>
+        </div>
+      <% } %>
+
+      <div>
+        <label for="name" class="block text-sm font-medium text-slate-700 mb-1">Navn</label>
+        <input type="text" id="name" name="name" required
+          value="<%= typeof formData !== 'undefined' && formData?.name ? formData.name : '' %>"
+          class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-slate-400 focus:border-slate-400"
+          placeholder="Dit fulde navn">
+      </div>
+
+      <div>
+        <label for="email" class="block text-sm font-medium text-slate-700 mb-1">Email</label>
+        <input type="email" id="email" name="email" required
+          value="<%= typeof formData !== 'undefined' && formData?.email ? formData.email : '' %>"
+          class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-slate-400 focus:border-slate-400"
+          placeholder="din@email.dk">
+      </div>
+
+      <div>
+        <label for="phone" class="block text-sm font-medium text-slate-700 mb-1">Telefon</label>
+        <input type="tel" id="phone" name="phone" required
+          value="<%= typeof formData !== 'undefined' && formData?.phone ? formData.phone : '' %>"
+          class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-slate-400 focus:border-slate-400"
+          placeholder="12 34 56 78">
+      </div>
+
+      <div>
+        <label for="address_raw" class="block text-sm font-medium text-slate-700 mb-1">Adresse</label>
+        <input type="text" id="address_raw" name="address_raw" required autocomplete="off"
+          value="<%= typeof formData !== 'undefined' && formData?.address_raw ? formData.address_raw : '' %>"
+          class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-slate-400 focus:border-slate-400"
+          placeholder="Skriv adresse og vælg fra listen">
+        <input type="hidden" id="dawa_address_id" name="dawa_address_id"
+          value="<%= typeof formData !== 'undefined' && formData?.dawa_address_id ? formData.dawa_address_id : '' %>">
+        <ul id="address-suggestions" class="mt-1 bg-white border border-slate-200 rounded-lg shadow-lg divide-y divide-slate-100 hidden max-h-48 overflow-y-auto"></ul>
+      </div>
+
+      <div>
+        <label for="frequency" class="block text-sm font-medium text-slate-700 mb-1">Frekvens</label>
+        <select id="frequency" name="frequency" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-slate-400 focus:border-slate-400">
+          <option value="one_time" <%= (typeof formData !== 'undefined' && formData?.frequency === 'one_time') ? 'selected' : '' %>>Engangs</option>
+          <option value="quarterly" <%= (typeof formData !== 'undefined' && formData?.frequency === 'quarterly') ? 'selected' : '' %>>Kvartalsvis</option>
+          <option value="monthly" <%= (typeof formData !== 'undefined' && formData?.frequency === 'monthly') ? 'selected' : '' %>>Månedligt</option>
+        </select>
+      </div>
+
+      <button type="submit" class="w-full py-3 bg-slate-800 text-white font-medium rounded-lg hover:bg-slate-700 transition">
+        Få tilbud
+      </button>
+    </form>
+  </div>
+
+  <script>
+    (function() {
+      const addrInput = document.getElementById('address_raw');
+      const idInput = document.getElementById('dawa_address_id');
+      const list = document.getElementById('address-suggestions');
+
+      let debounceTimer;
+      addrInput.addEventListener('input', function() {
+        clearTimeout(debounceTimer);
+        const q = this.value.trim();
+        idInput.value = '';
+        if (q.length < 3) {
+          list.classList.add('hidden');
+          list.innerHTML = '';
+          return;
+        }
+        debounceTimer = setTimeout(async () => {
+          try {
+            const res = await fetch('https://api.dataforsyningen.dk/autocomplete?q=' + encodeURIComponent(q) + '&type=adresse&caretpos=0&forskellige=1');
+            const data = await res.json();
+            const items = Array.isArray(data) ? data.filter(i => i.type === 'adgangsadresse' && i.data?.id) : [];
+            list.innerHTML = items.slice(0, 8).map(i => '<li data-id="' + (i.data.id || '') + '" data-tekst="' + (i.tekst || i.forslagstekst || '').replace(/"/g, '&quot;') + '" class="px-3 py-2 cursor-pointer hover:bg-slate-50 text-slate-800">' + (i.tekst || i.forslagstekst || '') + '</li>').join('');
+            list.classList.remove('hidden');
+          } catch (e) {
+            list.classList.add('hidden');
+          }
+        }, 200);
+      });
+
+      list.addEventListener('click', function(e) {
+        const li = e.target.closest('li[data-id]');
+        if (li) {
+          addrInput.value = li.dataset.tekst || '';
+          idInput.value = li.dataset.id || '';
+          list.classList.add('hidden');
+          list.innerHTML = '';
+        }
+      });
+
+      addrInput.addEventListener('blur', function() {
+        setTimeout(() => list.classList.add('hidden'), 150);
+      });
+    })();
+  </script>
+</body>
+</html>
