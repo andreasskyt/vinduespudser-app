@@ -3,7 +3,7 @@ const router = express.Router();
 const { getTenantBySlug, createLead, createQuote } = require('../db/supabase');
 const { getPropertyData } = require('../services/PropertyDataService');
 const { assembleQuote } = require('../services/QuoteService');
-const { renderTemplate } = require('../utils/templateRenderer');
+const { renderTemplate, normalizeAddress } = require('../utils/templateRenderer');
 const { sendLeadEmail } = require('../services/EmailService');
 
 /** GET /:slug – vis tilbudsformular */
@@ -71,10 +71,11 @@ router.post('/:slug/submit', async (req, res, next) => {
     const assembled = assembleQuote(propertyData, tenant.pricing, tenant, freq);
     const { final_price, estimated_windows, quote_html, pricing_snapshot, templateData } = assembled;
 
+    const addressClean = normalizeAddress(address_raw.trim());
     const templateDataFull = {
       ...templateData,
       customer_name: name.trim(),
-      address: address_raw.trim(),
+      address: addressClean,
     };
     const renderedQuote = renderTemplate(tenant.quote_template, templateDataFull);
 
@@ -106,7 +107,7 @@ router.post('/:slug/submit', async (req, res, next) => {
         rendered: renderedQuote,
       },
       customer_name: name.trim(),
-      address: address_raw.trim(),
+      address: addressClean,
     };
 
     // Send email til tenant
@@ -115,7 +116,7 @@ router.post('/:slug/submit', async (req, res, next) => {
       <p><strong>Navn:</strong> ${name}</p>
       <p><strong>Email:</strong> ${email}</p>
       <p><strong>Telefon:</strong> ${phone}</p>
-      <p><strong>Adresse:</strong> ${address_raw}</p>
+      <p><strong>Adresse:</strong> ${addressClean}</p>
       <p><strong>Estimeret antal vinduer:</strong> ${estimated_windows}</p>
       <p><strong>Pris:</strong> ${final_price} kr.</p>
       <p><strong>Frekvens:</strong> ${templateDataFull.frequency}</p>
@@ -124,7 +125,7 @@ router.post('/:slug/submit', async (req, res, next) => {
     `;
     await sendLeadEmail({
       to: tenant.contact_email,
-      subject: `Nyt tilbud fra ${name} – ${address_raw}`,
+      subject: `Nyt tilbud fra ${name} – ${addressClean}`,
       html: emailHtml,
     });
 

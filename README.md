@@ -33,6 +33,36 @@ Alle admin-routes kræver `Authorization: Bearer ADMIN_KEY` header.
 - `POST /admin/tenants` – opret tenant (JSON body)
 - `PATCH /admin/tenants/:id` – opdater tenant
 
+### Oprettelse af tenant (POST /admin/tenants)
+
+Obligatoriske felter: `slug`, `name`, `contact_email`, `pricing`, `quote_template`.
+
+**Prisconfig (pricing)** – JSON-objekt med følgende felter:
+
+```json
+{
+  "min_price": 399,
+  "price_per_window": 45,
+  "top_window_surcharge": 80,
+  "second_floor_surcharge_pct": 0.15,
+  "frequency_discounts": {
+    "one_time": 0.00,
+    "quarterly": 0.05,
+    "monthly": 0.10
+  }
+}
+```
+
+| Felt | Betydning |
+|------|-----------|
+| `min_price` | Mindstepris i kr. – tilbuddet kan aldrig gå under dette |
+| `price_per_window` | Kr. per vindue – grundprisen ganges med antal estimerede vinduer |
+| `top_window_surcharge` | Fast tillæg i kr. hvis bygningen har flere etager (tagvinduer/ovenlysvinduer) |
+| `second_floor_surcharge_pct` | Procentvis tillæg (0–1) for 2. sal og derover – dækker ekstra arbejde ved høje vinduer |
+| `frequency_discounts.one_time` | Ingen rabat ved enkeltbesøg (0) |
+| `frequency_discounts.quarterly` | Rabat ved kvartalsvis aftale (0.05 = 5%) |
+| `frequency_discounts.monthly` | Rabat ved månedlig aftale (0.10 = 10%) |
+
 ## Miljøvariabler
 
 Se `.env.example` for krævede variabler.

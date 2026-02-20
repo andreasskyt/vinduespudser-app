@@ -1,3 +1,15 @@
+/**
+ * Fjerner tomme komma-delte dele fra adresse (f.eks. "Åhusene 7, , 8000 Aarhus C" → "Åhusene 7, 8000 Aarhus C").
+ */
+function normalizeAddress(str) {
+  if (!str || typeof str !== 'string') return '';
+  return str
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .join(', ');
+}
+
 function escapeHtml(s) {
   return String(s)
     .replace(/&/g, '&amp;')
@@ -23,4 +35,4 @@ function renderTemplate(template, data) {
   });
 }
 
-module.exports = { renderTemplate };
+module.exports = { renderTemplate, normalizeAddress };
