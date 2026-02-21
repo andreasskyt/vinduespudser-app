@@ -1,12 +1,13 @@
 /**
  * Fjerner tomme komma-delte dele fra adresse (f.eks. "Åhusene 7, , 8000 Aarhus C" → "Åhusene 7, 8000 Aarhus C").
+ * Håndterer også flere på hinanden følgende kommaer og mellemrum.
  */
 function normalizeAddress(str) {
   if (!str || typeof str !== 'string') return '';
   return str
     .split(',')
     .map((s) => s.trim())
-    .filter(Boolean)
+    .filter((p) => p.length > 0)
     .join(', ');
 }
 

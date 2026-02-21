@@ -2,88 +2,206 @@
 <html lang="da">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
   <title>Tilbud – <%= tenant.name %></title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    html { overflow-x: hidden; }
+    body { overflow-x: hidden; }
+    input, select, textarea { font-size: 16px !important; }
+    button, label.service-card, a.btn { min-height: 44px; display: inline-flex; align-items: center; justify-content: center; }
+    .service-card { display: block; border: 2px solid #e2e8f0; border-radius: 12px; padding: 16px; margin-bottom: 8px; cursor: pointer; transition: all 0.15s; min-height: 48px; }
+    .service-card:has(input:checked) { border-color: #2563eb; background-color: #eff6ff; }
+    .service-card-content { display: flex; justify-content: space-between; align-items: center; }
+    .frequency-card { display: block; border: 2px solid #e2e8f0; border-radius: 12px; padding: 16px; margin-bottom: 8px; cursor: pointer; transition: all 0.15s; min-height: 48px; }
+    .frequency-card:has(input:checked) { border-color: #2563eb; background-color: #eff6ff; }
+    .service-card .service-check { display: none; }
+    .service-card:has(input:checked) .service-check { display: inline; }
+    .frequency-card .freq-check { display: none; }
+    .frequency-card:has(input:checked) .freq-check { display: inline; }
+    input[type="range"] { width: 100%; height: 8px; accent-color: #2563eb; -webkit-appearance: none; appearance: none; background: #e2e8f0; border-radius: 4px; }
+    input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 24px; height: 24px; background: #2563eb; border-radius: 50%; cursor: pointer; }
+    #address-suggestions li { min-height: 48px; display: flex; align-items: center; padding: 12px 16px; }
+  </style>
 </head>
-<body class="bg-slate-50 min-h-screen py-8 px-4">
-  <div class="max-w-lg mx-auto">
-    <header class="text-center mb-8">
-      <h1 class="text-2xl font-semibold text-slate-800"><%= tenant.name %></h1>
-      <p class="text-slate-600 mt-1">Få et uforpligtende tilbud på vinduespudsning</p>
+<body class="bg-slate-50 min-h-screen text-slate-800 antialiased overflow-x-hidden">
+  <div class="min-h-screen flex flex-col max-w-[480px] mx-auto px-4 py-4 sm:py-6">
+    <header class="text-center mb-4 flex-shrink-0">
+      <h1 class="text-xl sm:text-2xl font-semibold text-slate-800"><%= tenant.name %></h1>
+      <p class="text-base text-slate-600 mt-1">Få et uforpligtende tilbud på vinduespudsning</p>
     </header>
 
-    <form action="/<%= slug %>/submit" method="post" class="bg-white rounded-xl shadow-lg p-6 space-y-4">
+    <div class="text-center text-slate-500 text-base mb-4 flex-shrink-0" id="step-label">Trin 1 af 4</div>
+    <div class="flex justify-center gap-1.5 mb-4 flex-shrink-0">
+      <span id="step-dot-1" class="w-2.5 h-2.5 rounded-full bg-slate-800 transition-colors"></span>
+      <span id="step-dot-2" class="w-2.5 h-2.5 rounded-full bg-slate-300 transition-colors"></span>
+      <span id="step-dot-3" class="w-2.5 h-2.5 rounded-full bg-slate-300 transition-colors"></span>
+      <span id="step-dot-4" class="w-2.5 h-2.5 rounded-full bg-slate-300 transition-colors"></span>
+    </div>
+
+    <form action="/<%= slug %>/submit" method="post" id="quote-form" class="flex-1 flex flex-col min-h-0">
+      <input type="hidden" name="dawa_address_id" id="dawa_address_id" value="">
+      <input type="hidden" name="address_raw" id="address_raw" value="">
+
       <% if (typeof error !== 'undefined' && error) { %>
-        <div class="p-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-800 text-sm">
+        <div class="p-4 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-base mb-4 flex-shrink-0">
           <%= error %>
         </div>
       <% } %>
 
-      <div>
-        <label for="name" class="block text-sm font-medium text-slate-700 mb-1">Navn</label>
-        <input type="text" id="name" name="name" required
-          value="<%= typeof formData !== 'undefined' && formData?.name ? formData.name : '' %>"
-          class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-slate-400 focus:border-slate-400"
-          placeholder="Dit fulde navn">
-      </div>
+      <div class="flex-1 overflow-y-auto">
+        <!-- Step 1: Adresse -->
+        <div id="step-1" class="step-content">
+          <div class="bg-white rounded-xl shadow-sm p-6 space-y-5">
+            <div class="relative">
+              <label for="address_input" class="block text-base font-medium text-slate-700 mb-2">Adresse</label>
+              <input type="text" id="address_input" autocomplete="off"
+                class="w-full py-3 px-4 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                placeholder="Skriv adresse og vælg fra listen">
+              <ul id="address-suggestions" class="mt-2 bg-white border border-slate-200 rounded-xl shadow-lg divide-y divide-slate-100 hidden max-h-56 overflow-y-auto absolute left-0 right-0 z-20"></ul>
+            </div>
+            <button type="button" id="btn-next-1" disabled class="w-full min-h-[52px] py-3 px-4 bg-slate-300 text-slate-500 font-semibold text-lg rounded-xl cursor-not-allowed">
+              Næste
+            </button>
+          </div>
+        </div>
 
-      <div>
-        <label for="email" class="block text-sm font-medium text-slate-700 mb-1">Email</label>
-        <input type="email" id="email" name="email" required
-          value="<%= typeof formData !== 'undefined' && formData?.email ? formData.email : '' %>"
-          class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-slate-400 focus:border-slate-400"
-          placeholder="din@email.dk">
-      </div>
+        <!-- Step 2: Bekræft bolig -->
+        <div id="step-2" class="step-content hidden">
+          <div class="bg-white rounded-xl shadow-sm p-6 space-y-5">
+            <p class="text-base text-slate-600">Vi fandt følgende for din adresse:</p>
+            <div id="bbr-info" class="p-4 bg-slate-50 rounded-xl text-base text-slate-700 space-y-1"></div>
+            <div id="etage-fields" class="hidden space-y-5">
+              <div>
+                <label for="etage" class="block text-base font-medium text-slate-700 mb-2">Hvilken etage bor du på?</label>
+                <select id="etage" name="etage" class="w-full py-3 px-4 border border-slate-300 rounded-xl">
+                  <option value="1">1</option>
+                  <option value="2">2</option>
+                  <option value="3">3</option>
+                  <option value="4">4</option>
+                  <option value="5">5</option>
+                  <option value="6">6</option>
+                  <option value="7">7</option>
+                  <option value="8">8</option>
+                  <option value="9">9</option>
+                  <option value="10">10</option>
+                </select>
+              </div>
+              <div>
+                <p class="text-base font-medium text-slate-700 mb-2">Antal vinduer i din lejlighed</p>
+                <p class="text-2xl font-bold text-slate-800 mb-2">Antal vinduer: <span id="window-val-apt">8</span></p>
+                <input type="range" id="window-slider-apt" name="window_count" min="1" max="30" value="8" class="w-full">
+              </div>
+            </div>
+            <div id="villa-fields" class="hidden">
+              <p class="text-base font-medium text-slate-700 mb-2">Bekræft antal vinduer</p>
+              <p class="text-2xl font-bold text-slate-800 mb-2">Antal vinduer: <span id="window-val-villa">12</span></p>
+              <input type="range" id="window-slider-villa" name="window_count" min="1" max="30" value="12" class="w-full">
+            </div>
+            <div class="flex flex-col-reverse gap-3 pt-2">
+              <button type="button" id="btn-next-2" class="w-full min-h-[52px] py-3 px-4 bg-slate-800 text-white font-semibold text-lg rounded-xl">Næste</button>
+              <button type="button" id="btn-back-2" class="text-slate-600 text-base font-medium py-3 self-start">← Tilbage</button>
+            </div>
+          </div>
+        </div>
 
-      <div>
-        <label for="phone" class="block text-sm font-medium text-slate-700 mb-1">Telefon</label>
-        <input type="tel" id="phone" name="phone" required
-          value="<%= typeof formData !== 'undefined' && formData?.phone ? formData.phone : '' %>"
-          class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-slate-400 focus:border-slate-400"
-          placeholder="12 34 56 78">
-      </div>
+        <!-- Step 3: Services og frekvens -->
+        <div id="step-3" class="step-content hidden">
+          <div class="bg-white rounded-xl shadow-sm p-6 space-y-5">
+            <p class="text-base font-medium text-slate-700">Vælg services</p>
+            <div id="services-list" class="space-y-2"></div>
+            <div id="tagvinduer-count" class="hidden">
+              <label for="tagvinduer_count" class="block text-base font-medium text-slate-700 mb-2">Antal tagvinduer</label>
+              <input type="number" id="tagvinduer_count" name="tagvinduer_count" min="1" max="10" value="1" class="w-full py-3 px-4 border border-slate-300 rounded-xl">
+            </div>
+            <div>
+              <p class="text-base font-medium text-slate-700 mb-3">Hvor ofte ønsker du vinduerne vasket?</p>
+              <div id="frequency-cards" class="space-y-2"></div>
+              <input type="hidden" id="frequency" name="frequency" value="one_time">
+            </div>
+            <div class="flex flex-col-reverse gap-3 pt-2">
+              <button type="button" id="btn-next-3" class="w-full min-h-[52px] py-3 px-4 bg-slate-800 text-white font-semibold text-lg rounded-xl">Næste</button>
+              <button type="button" id="btn-back-3" class="text-slate-600 text-base font-medium py-3 self-start">← Tilbage</button>
+            </div>
+          </div>
+        </div>
 
-      <div>
-        <label for="address_raw" class="block text-sm font-medium text-slate-700 mb-1">Adresse</label>
-        <input type="text" id="address_raw" name="address_raw" required autocomplete="off"
-          value="<%= typeof formData !== 'undefined' && formData?.address_raw ? formData.address_raw : '' %>"
-          class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-slate-400 focus:border-slate-400"
-          placeholder="Skriv adresse og vælg fra listen">
-        <input type="hidden" id="dawa_address_id" name="dawa_address_id"
-          value="<%= typeof formData !== 'undefined' && formData?.dawa_address_id ? formData.dawa_address_id : '' %>">
-        <ul id="address-suggestions" class="mt-1 bg-white border border-slate-200 rounded-lg shadow-lg divide-y divide-slate-100 hidden max-h-48 overflow-y-auto"></ul>
+        <!-- Step 4: Kontakt -->
+        <div id="step-4" class="step-content hidden">
+          <div class="bg-white rounded-xl shadow-sm p-6 space-y-5">
+            <div>
+              <label for="name" class="block text-base font-medium text-slate-700 mb-2">Navn</label>
+              <input type="text" id="name" name="name" required class="w-full py-3 px-4 border border-slate-300 rounded-xl" placeholder="Dit fulde navn">
+            </div>
+            <div>
+              <label for="email" class="block text-base font-medium text-slate-700 mb-2">Email</label>
+              <input type="email" id="email" name="email" required class="w-full py-3 px-4 border border-slate-300 rounded-xl" placeholder="din@email.dk">
+            </div>
+            <div>
+              <label for="phone" class="block text-base font-medium text-slate-700 mb-2">Telefon</label>
+              <input type="tel" id="phone" name="phone" required class="w-full py-3 px-4 border border-slate-300 rounded-xl" placeholder="12 34 56 78">
+            </div>
+            <div id="price-summary" class="p-5 bg-slate-50 rounded-xl">
+              <p class="text-slate-600 text-base mb-1">Estimeret pris</p>
+              <p class="text-3xl sm:text-4xl font-bold text-slate-800" id="live-price">–</p>
+            </div>
+            <div class="flex flex-col-reverse gap-3 pt-2 pb-8">
+              <button type="submit" class="w-full min-h-[52px] py-3 px-4 bg-slate-800 text-white font-semibold text-lg rounded-xl sticky bottom-4">Få dit tilbud</button>
+              <button type="button" id="btn-back-4" class="text-slate-600 text-base font-medium py-3 self-start">← Tilbage</button>
+            </div>
+          </div>
+        </div>
       </div>
-
-      <div>
-        <label for="frequency" class="block text-sm font-medium text-slate-700 mb-1">Hvor ofte ønsker du vinduerne vasket?</label>
-        <select id="frequency" name="frequency" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-slate-400 focus:border-slate-400">
-          <option value="one_time" <%= (typeof formData !== 'undefined' && formData?.frequency === 'one_time') ? 'selected' : '' %>>Én gang</option>
-          <option value="quarterly" <%= (typeof formData !== 'undefined' && formData?.frequency === 'quarterly') ? 'selected' : '' %>>Hvert kvartal (5% rabat)</option>
-          <option value="monthly" <%= (typeof formData !== 'undefined' && formData?.frequency === 'monthly') ? 'selected' : '' %>>Månedligt (10% rabat)</option>
-        </select>
-      </div>
-
-      <button type="submit" class="w-full py-3 bg-slate-800 text-white font-medium rounded-lg hover:bg-slate-700 transition">
-        Få tilbud
-      </button>
     </form>
   </div>
 
   <script>
     (function() {
-      const addrInput = document.getElementById('address_raw');
+      const pricing = <%- JSON.stringify(tenant.pricing || {}) %>;
+      const services = pricing.services || {};
+      const includedServices = Object.entries(services).filter(([, s]) => s && s.included === true);
+      const discounts = pricing.frequency_discounts || { one_time: 0, quarterly: 0.05, monthly: 0.1 };
+
+      const freqOptions = [
+        { value: 'one_time', label: 'Én gang' },
+        { value: 'quarterly', label: 'Hvert kvartal (' + Math.round((discounts.quarterly || 0) * 100) + '% rabat)' },
+        { value: 'monthly', label: 'Månedligt (' + Math.round((discounts.monthly || 0) * 100) + '% rabat)' }
+      ];
+
+      let currentStep = 1;
+      let propertyData = null;
+      let windowCount = 12;
+
+      function showStep(n) {
+        document.querySelectorAll('.step-content').forEach((el, i) => {
+          el.classList.toggle('hidden', i + 1 !== n);
+        });
+        document.querySelectorAll('[id^="step-dot-"]').forEach((el, i) => {
+          el.classList.toggle('bg-slate-800', i + 1 <= n);
+          el.classList.toggle('bg-slate-300', i + 1 > n);
+        });
+        document.getElementById('step-label').textContent = 'Trin ' + n + ' af 4';
+        currentStep = n;
+        if (n === 4) updateLivePrice();
+      }
+
+      const addrInput = document.getElementById('address_input');
       const idInput = document.getElementById('dawa_address_id');
+      const addrRawInput = document.getElementById('address_raw');
       const list = document.getElementById('address-suggestions');
+      const btnNext1 = document.getElementById('btn-next-1');
 
       let debounceTimer;
       addrInput.addEventListener('input', function() {
         clearTimeout(debounceTimer);
-        const q = this.value.trim();
         idInput.value = '';
+        addrRawInput.value = '';
+        btnNext1.disabled = true;
+        btnNext1.classList.add('bg-slate-300', 'text-slate-500', 'cursor-not-allowed');
+        btnNext1.classList.remove('bg-slate-800', 'text-white');
+        const q = this.value.trim();
         if (q.length < 3) {
           list.classList.add('hidden');
-          list.innerHTML = '';
           return;
         }
         debounceTimer = setTimeout(async () => {
@@ -91,7 +209,11 @@
             const res = await fetch('https://api.dataforsyningen.dk/autocomplete?q=' + encodeURIComponent(q) + '&type=adresse&caretpos=0&forskellige=1');
             const data = await res.json();
             const items = Array.isArray(data) ? data.filter(i => i.type === 'adgangsadresse' && i.data?.id) : [];
-            list.innerHTML = items.slice(0, 8).map(i => '<li data-id="' + (i.data.id || '') + '" data-tekst="' + (i.tekst || i.forslagstekst || '').replace(/"/g, '&quot;') + '" class="px-3 py-2 cursor-pointer hover:bg-slate-50 text-slate-800">' + (i.tekst || i.forslagstekst || '') + '</li>').join('');
+            list.innerHTML = items.slice(0, 8).map(function(i) {
+              var raw = i.tekst || i.forslagstekst || '';
+              var clean = raw.split(',').map(function(s) { return s.trim(); }).filter(function(p) { return p.length > 0; }).join(', ');
+              return '<li data-id="' + (i.data.id || '') + '" data-tekst="' + raw.replace(/"/g, '&quot;') + '" class="cursor-pointer hover:bg-slate-50 active:bg-slate-100 border-b border-slate-100 last:border-0">' + (clean || raw) + '</li>';
+            }).join('');
             list.classList.remove('hidden');
           } catch (e) {
             list.classList.add('hidden');
@@ -99,19 +221,172 @@
         }, 200);
       });
 
+      function normalizeAddressText(t) {
+        if (!t || typeof t !== 'string') return '';
+        return t.split(',').map(function(s) { return s.trim(); }).filter(function(p) { return p.length > 0; }).join(', ');
+      }
+
       list.addEventListener('click', function(e) {
         const li = e.target.closest('li[data-id]');
         if (li) {
-          addrInput.value = li.dataset.tekst || '';
+          const raw = li.dataset.tekst || '';
+          const clean = normalizeAddressText(raw);
+          addrInput.value = clean;
           idInput.value = li.dataset.id || '';
+          addrRawInput.value = clean;
           list.classList.add('hidden');
-          list.innerHTML = '';
+          btnNext1.disabled = false;
+          btnNext1.classList.remove('bg-slate-300', 'text-slate-500', 'cursor-not-allowed');
+          btnNext1.classList.add('bg-slate-800', 'text-white');
         }
       });
 
-      addrInput.addEventListener('blur', function() {
-        setTimeout(() => list.classList.add('hidden'), 150);
+      addrInput.addEventListener('blur', () => setTimeout(() => list.classList.add('hidden'), 200));
+
+      btnNext1.addEventListener('click', async () => {
+        const addrId = idInput.value.trim();
+        if (!addrId) return;
+        btnNext1.disabled = true;
+        btnNext1.textContent = 'Henter...';
+        try {
+          const res = await fetch('/api/property-data?addressId=' + encodeURIComponent(addrId));
+          const data = await res.json();
+          propertyData = data.normalized || { buildingType: 'parcelhus', areaM2: 100, floors: 1, builtYear: null };
+        } catch (e) {
+          propertyData = { buildingType: 'parcelhus', areaM2: 100, floors: 1, builtYear: null };
+        }
+        btnNext1.textContent = 'Næste';
+        btnNext1.disabled = false;
+
+        const typeLabels = { villa: 'Villa', parcelhus: 'Parcelhus', rækkehus: 'Rækkehus', stuehus: 'Stuehus', etagebolig: 'Lejlighed', kollegium: 'Kollegium' };
+        document.getElementById('bbr-info').innerHTML = [
+          '<strong>Bygningstype:</strong> ' + (typeLabels[propertyData.buildingType] || propertyData.buildingType),
+          '<strong>Areal:</strong> ' + (propertyData.areaM2 || '–') + ' m²',
+          '<strong>Etager:</strong> ' + (propertyData.floors || 1),
+          propertyData.builtYear ? '<strong>Opførelsesår:</strong> ' + propertyData.builtYear : ''
+        ].filter(Boolean).join('<br>');
+
+        const isApartment = propertyData.buildingType === 'etagebolig' || propertyData.buildingType === 'kollegium';
+        document.getElementById('etage-fields').classList.toggle('hidden', !isApartment);
+        document.getElementById('villa-fields').classList.toggle('hidden', isApartment);
+
+        const est = estimateWindowCount(propertyData);
+        windowCount = est;
+        document.getElementById('window-slider-apt').value = est;
+        document.getElementById('window-slider-villa').value = est;
+        document.getElementById('window-val-apt').textContent = est;
+        document.getElementById('window-val-villa').textContent = est;
+
+        showStep(2);
       });
+
+      function estimateWindowCount(pd) {
+        const base = { villa: 16, parcelhus: 14, rækkehus: 12, stuehus: 12, etagebolig: 8, kollegium: 6 }[pd?.buildingType] ?? 12;
+        if (pd?.buildingType === 'etagebolig' || pd?.buildingType === 'kollegium') return base;
+        const areaFactor = Math.min(1.5, Math.max(0.7, (pd?.areaM2 || 80) / 100));
+        const floorBonus = Math.max(0, ((pd?.floors || 1) - 1)) * 4;
+        return Math.round(base * areaFactor + floorBonus);
+      }
+
+      document.getElementById('window-slider-apt').addEventListener('input', function() {
+        windowCount = parseInt(this.value, 10);
+        document.getElementById('window-val-apt').textContent = windowCount;
+      });
+      document.getElementById('window-slider-villa').addEventListener('input', function() {
+        windowCount = parseInt(this.value, 10);
+        document.getElementById('window-val-villa').textContent = windowCount;
+      });
+
+      document.getElementById('btn-back-2').addEventListener('click', () => showStep(1));
+      document.getElementById('btn-next-2').addEventListener('click', () => {
+        const villaSlider = document.getElementById('window-slider-villa');
+        const aptSlider = document.getElementById('window-slider-apt');
+        windowCount = document.getElementById('villa-fields').classList.contains('hidden')
+          ? parseInt(aptSlider.value, 10)
+          : parseInt(villaSlider.value, 10);
+
+        document.querySelectorAll('[name="window_count"]').forEach(el => el.removeAttribute('name'));
+        (document.getElementById('villa-fields').classList.contains('hidden') ? aptSlider : villaSlider).setAttribute('name', 'window_count');
+
+        document.getElementById('services-list').innerHTML = includedServices.map(([key, svc]) => {
+          const checked = svc.default_selected ? ' checked' : '';
+          const reqCount = svc.requires_count ? ' data-requires-count="1"' : '';
+          return '<label class="service-card"><input type="checkbox" name="selected_services" value="' + key + '"' + checked + reqCount + ' class="sr-only"><div class="service-card-content"><span class="service-label text-base font-medium">' + (svc.label || key) + '</span><span class="service-check text-blue-600 text-xl font-bold">✓</span></div></label>';
+        }).join('');
+        document.getElementById('services-list').addEventListener('change', function(e) {
+          if (e.target.value === 'tagvinduer') document.getElementById('tagvinduer-count').classList.toggle('hidden', !e.target.checked);
+          updateLivePrice();
+        });
+
+        document.getElementById('frequency-cards').innerHTML = freqOptions.map(f => '<label class="frequency-card"><input type="radio" name="frequency_radio" value="' + f.value + '"' + (f.value === 'one_time' ? ' checked' : '') + ' class="sr-only"><div class="flex justify-between items-center"><span class="text-base font-medium">' + f.label + '</span><span class="freq-check text-blue-600 text-xl font-bold">✓</span></div></label>').join('');
+        document.getElementById('frequency').value = 'one_time';
+        document.getElementById('frequency-cards').addEventListener('change', function(e) {
+          document.getElementById('frequency').value = e.target.value;
+          updateLivePrice();
+        });
+
+        const tagDiv = document.getElementById('tagvinduer-count');
+        const tagCb = document.querySelector('[value="tagvinduer"]');
+        tagDiv.classList.toggle('hidden', !(tagCb && tagCb.checked));
+
+        showStep(3);
+      });
+
+      document.getElementById('btn-back-3').addEventListener('click', () => showStep(2));
+      document.getElementById('btn-next-3').addEventListener('click', () => showStep(4));
+
+      document.getElementById('btn-back-4').addEventListener('click', () => showStep(3));
+
+      function getSelectedServices() {
+        const obj = {};
+        document.querySelectorAll('input[name="selected_services"]:checked').forEach(cb => {
+          if (cb.dataset.requiresCount) {
+            obj[cb.value] = { count: parseInt(document.getElementById('tagvinduer_count').value, 10) || 1 };
+          } else {
+            obj[cb.value] = {};
+          }
+        });
+        return obj;
+      }
+
+      function updateLivePrice() {
+        const freqInput = document.getElementById('frequency');
+        const freq = freqInput ? freqInput.value : 'one_time';
+        const sel = getSelectedServices();
+        const price = calculatePrice(windowCount, sel, freq);
+        const el = document.getElementById('live-price');
+        if (el) el.textContent = price !== null ? price + ' kr.' : '–';
+      }
+
+      function calculatePrice(windows, selectedServices, frequency) {
+        const minPrice = Number(pricing.min_price) || 399;
+        const pricePerWindow = Number(pricing.price_per_window) || 45;
+        const secondFloorPct = Number(pricing.second_floor_surcharge_pct) || 0.15;
+        const discountPct = Number(discounts[frequency]) || 0;
+
+        let base = windows * pricePerWindow;
+        const floors = propertyData?.floors ?? 1;
+        if (floors > 1) base += Math.round(base * secondFloorPct);
+
+        let surcharges = 0;
+        for (const [key, sel] of Object.entries(selectedServices)) {
+          const svc = services[key];
+          if (!svc) continue;
+          if (svc.surcharge_flat != null) surcharges += Number(svc.surcharge_flat) || 0;
+          else if (svc.surcharge_pct != null) surcharges += Math.round(base * Number(svc.surcharge_pct));
+          else if (svc.surcharge_per_window != null) surcharges += windows * (Number(svc.surcharge_per_window) || 0);
+          else if (svc.surcharge_each != null && svc.requires_count) {
+            const c = typeof sel === 'object' && sel && 'count' in sel ? Number(sel.count) || 0 : 0;
+            surcharges += c * (Number(svc.surcharge_each) || 0);
+          }
+        }
+
+        const subtotal = base + surcharges;
+        const discount = Math.round(subtotal * discountPct);
+        return Math.max(minPrice, subtotal - discount);
+      }
+
+      document.getElementById('tagvinduer_count')?.addEventListener('input', updateLivePrice);
     })();
   </script>
 </body>

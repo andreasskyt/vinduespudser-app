@@ -4,7 +4,24 @@ const { getTenantBySlug, createLead, createQuote } = require('../db/supabase');
 const { getPropertyData } = require('../services/PropertyDataService');
 const { assembleQuote } = require('../services/QuoteService');
 const { renderTemplate, normalizeAddress } = require('../utils/templateRenderer');
-const { sendLeadEmail } = require('../services/EmailService');
+const { sendQuoteToCustomer, sendQuoteToFirm } = require('../services/EmailService');
+const { sendWebhook } = require('../utils/webhook');
+/** GET /api/property-data?addressId=xxx – hent BBR-ejendomsdata (AJAX) */
+router.get('/api/property-data', async (req, res, next) => {
+  try {
+    const addressId = req.query.addressId?.trim();
+    if (!addressId) {
+      return res.status(400).json({ error: 'Manglende addressId' });
+    }
+    const result = await getPropertyData(addressId);
+    if (!result) {
+      return res.json({ normalized: null, rawBBR: null });
+    }
+    res.json({ normalized: result.normalized, rawBBR: result.rawBBR });
+  } catch (err) {
+    next(err);
+  }
+});
 
 /** GET /:slug – vis tilbudsformular */
 router.get('/:slug', async (req, res, next) => {
@@ -36,10 +53,23 @@ router.post('/:slug/submit', async (req, res, next) => {
       });
     }
 
-    const { name, email, phone, address_raw, dawa_address_id, frequency } = req.body || {};
+    const {
+      name,
+      email,
+      phone,
+      address_raw,
+      dawa_address_id,
+      frequency,
+      window_count: windowCountRaw,
+      tagvinduer_count,
+    } = req.body || {};
+
+    let selected_services = req.body.selected_services;
+    if (typeof selected_services === 'string') selected_services = [selected_services];
+    if (!Array.isArray(selected_services)) selected_services = [];
+
     const freq = ['one_time', 'quarterly', 'monthly'].includes(frequency) ? frequency : 'one_time';
 
-    // Validering
     if (!name?.trim() || !email?.trim() || !phone?.trim() || !address_raw?.trim()) {
       return res.status(400).render('quote-form', {
         tenant,
@@ -65,11 +95,42 @@ router.post('/:slug/submit', async (req, res, next) => {
     }
 
     if (!propertyData) {
-      propertyData = { buildingType: 'villa', areaM2: 100, floors: 1, builtYear: null };
+      propertyData = { buildingType: 'parcelhus', areaM2: 100, floors: 1, builtYear: null };
     }
 
-    const assembled = assembleQuote(propertyData, tenant.pricing, tenant, freq);
-    const { final_price, estimated_windows, quote_html, pricing_snapshot, templateData } = assembled;
+    const windowCount =
+      windowCountRaw != null && windowCountRaw !== ''
+        ? Math.min(30, Math.max(1, parseInt(windowCountRaw, 10) || 1))
+        : null;
+
+    const selectedServicesObj = {};
+    for (const key of selected_services) {
+      if (key === 'tagvinduer') {
+        selectedServicesObj[key] = { count: Math.min(10, Math.max(0, parseInt(tagvinduer_count, 10) || 0)) };
+      } else {
+        selectedServicesObj[key] = {};
+      }
+    }
+
+    const assembled = assembleQuote({
+      propertyData,
+      pricingConfig: tenant.pricing,
+      tenant,
+      frequency: freq,
+      selectedServices: selectedServicesObj,
+      windowCount,
+    });
+
+    const {
+      final_price,
+      estimated_windows,
+      base_price,
+      total_surcharges,
+      frequency_discount,
+      quote_html,
+      pricing_snapshot,
+      templateData,
+    } = assembled;
 
     const addressClean = normalizeAddress(address_raw.trim());
     const templateDataFull = {
@@ -95,6 +156,9 @@ router.post('/:slug/submit', async (req, res, next) => {
       pricing_snapshot,
       calculated_price: final_price,
       window_count_estimated: estimated_windows,
+      window_count: windowCount ?? estimated_windows,
+      selected_services: selectedServicesObj,
+      frequency: freq,
       quote_html: renderedQuote,
     });
 
@@ -110,39 +174,61 @@ router.post('/:slug/submit', async (req, res, next) => {
       address: addressClean,
     };
 
-    // Send email til tenant
-    const emailHtml = `
-      <h2>Nyt tilbud / lead</h2>
-      <p><strong>Navn:</strong> ${name}</p>
-      <p><strong>Email:</strong> ${email}</p>
-      <p><strong>Telefon:</strong> ${phone}</p>
-      <p><strong>Adresse:</strong> ${addressClean}</p>
-      <p><strong>Estimeret antal vinduer:</strong> ${estimated_windows}</p>
-      <p><strong>Pris:</strong> ${final_price} kr.</p>
-      <p><strong>Frekvens:</strong> ${templateDataFull.frequency}</p>
-      <hr>
-      <div>${renderedQuote.replace(/\n/g, '<br>')}</div>
-    `;
-    await sendLeadEmail({
-      to: tenant.contact_email,
-      subject: `Nyt tilbud fra ${name} – ${addressClean}`,
-      html: emailHtml,
-    });
+    const leadObj = { id: lead.id, name: name.trim(), email: email.trim(), phone: phone.trim() };
+    const quoteForEmail = {
+      window_count: windowCount ?? estimated_windows,
+      estimated_windows,
+      selected_services: selectedServicesObj,
+      base_price: base_price ?? 0,
+      total_surcharges: total_surcharges ?? 0,
+      frequency_discount: frequency_discount ?? 0,
+      final_price,
+    };
 
-    // Webhook hvis konfigureret
+    sendQuoteToCustomer({
+      tenant,
+      lead: leadObj,
+      quote: quoteForEmail,
+      address: addressClean,
+      frequencyLabel: templateDataFull.frequency,
+    }).catch((err) => console.error('Kunde-email fejl:', err.message));
+
+    sendQuoteToFirm({
+      tenant,
+      lead: leadObj,
+      quote: quoteForEmail,
+      address: addressClean,
+      frequencyLabel: templateDataFull.frequency,
+      renderedQuote,
+    }).catch((err) => console.error('Firma-email fejl:', err.message));
+
     if (tenant.webhook_url) {
-      try {
-        await fetch(tenant.webhook_url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            lead: { id: lead.id, name, email, phone, address_raw, dawa_address_id },
-            quote: { final_price, estimated_windows, quote_html: renderedQuote },
-          }),
-        });
-      } catch (e) {
-        console.warn('Webhook fejl:', e.message);
-      }
+      const webhookPayload = {
+        event: 'new_quote',
+        timestamp: new Date().toISOString(),
+        tenant_slug: req.params.slug,
+        customer: {
+          name: leadObj.name,
+          email: leadObj.email,
+          phone: leadObj.phone,
+        },
+        property: {
+          address: addressClean,
+          building_type: propertyData?.buildingType ?? null,
+          area_m2: propertyData?.areaM2 ?? null,
+          floors: propertyData?.floors ?? null,
+        },
+        quote: {
+          window_count: quoteForEmail.window_count,
+          selected_services: selected_services,
+          frequency: freq,
+          base_price: quoteForEmail.base_price,
+          total_surcharges: quoteForEmail.total_surcharges,
+          frequency_discount: quoteForEmail.frequency_discount,
+          final_price: quoteForEmail.final_price,
+        },
+      };
+      sendWebhook(tenant.webhook_url, webhookPayload).catch((err) => console.error('Webhook fejl:', err.message));
     }
 
     res.render('quote-result', quoteResultView);

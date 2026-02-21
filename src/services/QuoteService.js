@@ -3,23 +3,39 @@ const { calculateQuote } = require('./PricingEngine');
 
 /**
  * Samler tilbud fra prisberegning + ejendomsdata og renderer template.
+ * @param {Object} opts - propertyData, pricingConfig, tenant, frequency, selectedServices, windowCount
  */
-function assembleQuote(propertyData, pricingConfig, tenant, frequency = 'one_time') {
-  const quoteResult = calculateQuote(propertyData, pricingConfig, frequency);
+function assembleQuote(opts) {
+  const {
+    propertyData,
+    pricingConfig,
+    tenant,
+    frequency = 'one_time',
+    selectedServices = {},
+    windowCount = null,
+  } = opts;
+
+  const quoteResult = calculateQuote(
+    propertyData,
+    pricingConfig,
+    frequency,
+    selectedServices,
+    windowCount
+  );
   const { estimated_windows, final_price } = quoteResult;
 
   const frequencyLabels = {
-    one_time: 'Engangs',
+    one_time: 'Én gang',
     quarterly: 'Kvartalsvis',
     monthly: 'Månedligt',
   };
 
   const templateData = {
-    customer_name: '', // Sættes når lead er oprettet
-    address: '', // Sættes fra form
+    customer_name: '',
+    address: '',
     window_count: estimated_windows,
     price: final_price,
-    frequency: frequencyLabels[frequency] || 'Engangs',
+    frequency: frequencyLabels[frequency] || 'Én gang',
     company_name: tenant?.name || '',
   };
 

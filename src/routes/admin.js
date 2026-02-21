@@ -46,9 +46,20 @@ router.post('/tenants', async (req, res, next) => {
     const defaultPricing = {
       min_price: 399,
       price_per_window: 45,
-      top_window_surcharge: 80,
       second_floor_surcharge_pct: 0.15,
       frequency_discounts: { one_time: 0, quarterly: 0.05, monthly: 0.1 },
+      services: {
+        udvendig: { included: true, label: 'Udvendig vinduesvask', default_selected: true, surcharge_flat: 0 },
+        indvendig: { included: true, label: 'Indvendig vinduesvask', surcharge_pct: 0.5 },
+        karme: { included: true, label: 'Karme og rammer', surcharge_per_window: 8 },
+        kalkfrit: { included: true, label: 'Kalkfrit vand', surcharge_flat: 150 },
+        tagvinduer: { included: true, label: 'Ovenlysvinduer/tagvinduer', surcharge_each: 80, requires_count: true },
+        konservatorium: { included: false, label: 'Konservatorium/vinterhave', surcharge_flat: 400 },
+        franske_doere: { included: false, label: 'Franske altandøre', surcharge_per_window: 25 },
+        solceller: { included: false, label: 'Solceller', surcharge_flat: 300 },
+        tagrender: { included: false, label: 'Rensning af tagrender', surcharge_flat: 500 },
+        algebehandling: { included: false, label: 'Algebehandling/mosbehandling', surcharge_flat: 600 },
+      },
     };
 
     const tenant = await createTenant({

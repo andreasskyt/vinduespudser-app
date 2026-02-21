@@ -22,7 +22,7 @@ Multi-tenant SaaS til danske vinduespudserfirmaer. Appen genererer automatiske p
 
 1. Kopiér `.env.example` til `.env` og udfyld værdier
 2. `npm install`
-3. Kør Supabase-migration: `001_initial_schema.sql` i Supabase Dashboard
+3. Kør Supabase-migrationer: `001_initial_schema.sql` og `002_quote_details.sql` i Supabase Dashboard
 4. `npm run dev` eller `npm start`
 
 ## Admin API
@@ -37,31 +37,52 @@ Alle admin-routes kræver `Authorization: Bearer ADMIN_KEY` header.
 
 Obligatoriske felter: `slug`, `name`, `contact_email`, `pricing`, `quote_template`.
 
-**Prisconfig (pricing)** – JSON-objekt med følgende felter:
+**Prisconfig (pricing)** – JSON-objekt med basispriser og services:
 
 ```json
 {
   "min_price": 399,
   "price_per_window": 45,
-  "top_window_surcharge": 80,
   "second_floor_surcharge_pct": 0.15,
   "frequency_discounts": {
     "one_time": 0.00,
     "quarterly": 0.05,
     "monthly": 0.10
+  },
+  "services": {
+    "udvendig": { "included": true, "label": "Udvendig vinduesvask", "default_selected": true, "surcharge_flat": 0 },
+    "indvendig": { "included": true, "label": "Indvendig vinduesvask", "surcharge_pct": 0.5 },
+    "karme": { "included": true, "label": "Karme og rammer", "surcharge_per_window": 8 },
+    "tagvinduer": { "included": true, "label": "Ovenlysvinduer/tagvinduer", "surcharge_each": 80, "requires_count": true },
+    "konservatorium": { "included": false, "label": "Konservatorium/vinterhave", "surcharge_flat": 400 }
   }
 }
 ```
 
 | Felt | Betydning |
 |------|-----------|
-| `min_price` | Mindstepris i kr. – tilbuddet kan aldrig gå under dette |
-| `price_per_window` | Kr. per vindue – grundprisen ganges med antal estimerede vinduer |
-| `top_window_surcharge` | Fast tillæg i kr. hvis bygningen har flere etager (tagvinduer/ovenlysvinduer) |
-| `second_floor_surcharge_pct` | Procentvis tillæg (0–1) for 2. sal og derover – dækker ekstra arbejde ved høje vinduer |
-| `frequency_discounts.one_time` | Ingen rabat ved enkeltbesøg (0) |
-| `frequency_discounts.quarterly` | Rabat ved kvartalsvis aftale (0.05 = 5%) |
-| `frequency_discounts.monthly` | Rabat ved månedlig aftale (0.10 = 10%) |
+| `min_price` | Mindstepris i kr. |
+| `price_per_window` | Kr. per vindue |
+| `second_floor_surcharge_pct` | Procent tillæg (0–1) for 2+ etager |
+| `frequency_discounts` | Rabatter per frekvens |
+| `services` | Valgfrie tillæg. Kun `included: true` vises i formen. Tillægstyper: `surcharge_flat`, `surcharge_pct`, `surcharge_per_window`, `surcharge_each` (kræver `requires_count: true`) |
+
+**Valgfri webhook**: `webhook_url` – URL som modtager POST med lead og tilbudsdata ved nyt tilbud.
+
+**Eksempel – opret tenant med curl:**
+```bash
+curl -X POST http://localhost:3000/admin/tenants \
+  -H "Authorization: Bearer DIN_ADMIN_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "slug": "mit-firma",
+    "name": "Mit Vinduespudser",
+    "contact_email": "info@mitfirma.dk",
+    "webhook_url": "https://mit-crm.dk/webhooks/leads",
+    "pricing": { "min_price": 399, "price_per_window": 45 },
+    "quote_template": "Kære {{customer_name}}, tilbud for {{address}}: {{price}} kr."
+  }'
+```
 
 ## Miljøvariabler
 
