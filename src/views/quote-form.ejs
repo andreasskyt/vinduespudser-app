@@ -166,11 +166,15 @@
     </div>
   </div>
 
+  <script type="application/json" id="quote-form-data">
+    <%- JSON.stringify({ pricing: tenant.pricing || {}, serviceArea: tenant.service_area || null, tenantName: tenant.name }).replace(/<\/script/gi, '<\\/script') %>
+  </script>
   <script>
     (function() {
-      const pricing = <%- JSON.stringify(tenant.pricing || {}) %>;
-      const serviceArea = <%- JSON.stringify(tenant.service_area || null) %>;
-      const tenantName = <%- JSON.stringify(tenant.name) %>;
+      const _d = JSON.parse(document.getElementById('quote-form-data').textContent);
+      const pricing = _d.pricing;
+      const serviceArea = _d.serviceArea;
+      const tenantName = _d.tenantName || '';
 
       function getDistanceKm(lat1, lng1, lat2, lng2) {
         var R = 6371;
@@ -182,7 +186,7 @@
         return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
       }
       const services = pricing.services || {};
-      const includedServices = Object.entries(services).filter(([, s]) => s && s.included === true);
+      const includedServices = Object.entries(services).filter(function(entry) { return entry[1] && entry[1].included === true; });
       const discounts = pricing.frequency_discounts || { one_time: 0, quarterly: 0.05, monthly: 0.1 };
 
       const freqOptions = [
@@ -196,10 +200,10 @@
       let windowCount = 12;
 
       function showStep(n) {
-        document.querySelectorAll('.step-content').forEach((el, i) => {
+        document.querySelectorAll('.step-content').forEach(function(el, i) {
           el.classList.toggle('hidden', i + 1 !== n);
         });
-        document.querySelectorAll('[id^="step-dot-"]').forEach((el, i) => {
+        document.querySelectorAll('[id^="step-dot-"]').forEach(function(el, i) {
           el.classList.toggle('bg-slate-800', i + 1 <= n);
           el.classList.toggle('bg-slate-300', i + 1 > n);
         });
@@ -217,30 +221,34 @@
       let debounceTimer;
       addrInput.addEventListener('input', function() {
         clearTimeout(debounceTimer);
+        var self = this;
         idInput.value = '';
         addrRawInput.value = '';
         btnNext1.disabled = true;
         btnNext1.classList.add('bg-slate-300', 'text-slate-500', 'cursor-not-allowed');
         btnNext1.classList.remove('bg-slate-800', 'text-white');
-        const q = this.value.trim();
+        var q = self.value.trim();
         if (q.length < 3) {
           list.classList.add('hidden');
           return;
         }
-        debounceTimer = setTimeout(async () => {
-          try {
-            const res = await fetch('https://api.dataforsyningen.dk/autocomplete?q=' + encodeURIComponent(q) + '&type=adresse&caretpos=0&forskellige=1');
-            const data = await res.json();
-            const items = Array.isArray(data) ? data.filter(i => i.type === 'adgangsadresse' && i.data?.id) : [];
-            list.innerHTML = items.slice(0, 8).map(function(i) {
-              var raw = i.tekst || i.forslagstekst || '';
-              var clean = raw.split(',').map(function(s) { return s.trim(); }).filter(function(p) { return p.length > 0; }).join(', ');
-              return '<li data-id="' + (i.data.id || '') + '" data-tekst="' + raw.replace(/"/g, '&quot;') + '" class="cursor-pointer hover:bg-slate-50 active:bg-slate-100 border-b border-slate-100 last:border-0">' + (clean || raw) + '</li>';
-            }).join('');
-            list.classList.remove('hidden');
-          } catch (e) {
-            list.classList.add('hidden');
-          }
+        debounceTimer = setTimeout(function() {
+          fetch('/api/address-suggestions?q=' + encodeURIComponent(q))
+            .then(function(res) { return res.json(); })
+            .then(function(data) {
+              var arr = Array.isArray(data) ? data : [];
+              var valid = arr.filter(function(i) { return i && i.type === 'adgangsadresse' && i.data && i.data.id; });
+              var html = valid.slice(0, 8).map(function(i) {
+                var raw = i.tekst || i.forslagstekst || '';
+                var rawEsc = raw.split('"').join('&quot;');
+                var parts = raw.split(',').map(function(s) { return s.trim(); }).filter(function(p) { return p.length > 0; });
+                var clean = parts.join(', ');
+                return '<li data-id="' + (i.data.id || '') + '" data-tekst="' + rawEsc + '" class="cursor-pointer hover:bg-slate-50 active:bg-slate-100 border-b border-slate-100 last:border-0">' + (clean || raw) + '</li>';
+              }).join('');
+              list.innerHTML = html;
+              list.classList.remove('hidden');
+            })
+            .catch(function() { list.classList.add('hidden'); });
         }, 200);
       });
 
@@ -264,43 +272,45 @@
         }
       });
 
-      addrInput.addEventListener('blur', () => setTimeout(() => list.classList.add('hidden'), 200));
+      addrInput.addEventListener('blur', function() { setTimeout(function() { list.classList.add('hidden'); }, 200); });
 
-      btnNext1.addEventListener('click', async () => {
-        const addrId = idInput.value.trim();
+      btnNext1.addEventListener('click', function() {
+        var addrId = idInput.value.trim();
         if (!addrId) return;
         btnNext1.disabled = true;
         btnNext1.textContent = 'Henter...';
-        try {
-          const res = await fetch('/api/property-data?addressId=' + encodeURIComponent(addrId));
-          const data = await res.json();
-          propertyData = data.normalized || { buildingType: 'parcelhus', areaM2: 100, floors: 1, builtYear: null };
-        } catch (e) {
-          propertyData = { buildingType: 'parcelhus', areaM2: 100, floors: 1, builtYear: null };
-        }
-        btnNext1.textContent = 'Næste';
-        btnNext1.disabled = false;
-
-        var coords = propertyData && propertyData.coordinates;
-        if (serviceArea && serviceArea.radius_km && coords && coords.lat != null && coords.lng != null &&
-            serviceArea.center_lat != null && serviceArea.center_lng != null) {
-          var dist = getDistanceKm(serviceArea.center_lat, serviceArea.center_lng, coords.lat, coords.lng);
-          if (dist > serviceArea.radius_km) {
-            var centerAddr = serviceArea.center_address || 'vores base';
-            document.getElementById('out-of-area-message').textContent = tenantName + ' tilbyder vinduespudsning inden for ' + serviceArea.radius_km + ' km fra ' + centerAddr + '. Din adresse er ca. ' + Math.round(dist) + ' km væk. Du kan vælge en anden adresse eller fortsætte alligevel.';
-            document.getElementById('out-of-area-overlay').classList.remove('hidden');
-            return;
-          }
-        }
-
-        doShowStep2();
-      }
+        fetch('/api/property-data?addressId=' + encodeURIComponent(addrId))
+          .then(function(res) { return res.json(); })
+          .then(function(data) {
+            propertyData = data.normalized || { buildingType: 'parcelhus', areaM2: 100, floors: 1, builtYear: null };
+            btnNext1.textContent = 'Næste';
+            btnNext1.disabled = false;
+            var coords = propertyData && propertyData.coordinates;
+            if (serviceArea && serviceArea.radius_km && coords && coords.lat != null && coords.lng != null &&
+                serviceArea.center_lat != null && serviceArea.center_lng != null) {
+              var dist = getDistanceKm(serviceArea.center_lat, serviceArea.center_lng, coords.lat, coords.lng);
+              if (dist > serviceArea.radius_km) {
+                var centerAddr = serviceArea.center_address || 'vores base';
+                document.getElementById('out-of-area-message').textContent = tenantName + ' tilbyder vinduespudsning inden for ' + serviceArea.radius_km + ' km fra ' + centerAddr + '. Din adresse er ca. ' + Math.round(dist) + ' km væk. Vælg anden adresse eller fortsæt alligevel.';
+                document.getElementById('out-of-area-overlay').classList.remove('hidden');
+                return;
+              }
+            }
+            doShowStep2();
+          })
+          .catch(function() {
+            propertyData = { buildingType: 'parcelhus', areaM2: 100, floors: 1, builtYear: null };
+            btnNext1.textContent = 'Næste';
+            btnNext1.disabled = false;
+            doShowStep2();
+          });
+      });
 
       function doShowStep2() {
         const typeLabels = { villa: 'Villa', parcelhus: 'Parcelhus', rækkehus: 'Rækkehus', stuehus: 'Stuehus', etagebolig: 'Lejlighed', kollegium: 'Kollegium' };
         document.getElementById('bbr-info').innerHTML = [
           '<strong>Bygningstype:</strong> ' + (typeLabels[propertyData.buildingType] || propertyData.buildingType),
-          '<strong>Areal:</strong> ' + (propertyData.areaM2 || '–') + ' m²',
+          '<strong>Areal:</strong> ' + (propertyData.areaM2 || '-') + ' m²',
           '<strong>Etager:</strong> ' + (propertyData.floors || 1),
           propertyData.builtYear ? '<strong>Opførelsesår:</strong> ' + propertyData.builtYear : ''
         ].filter(Boolean).join('<br>');
@@ -320,10 +330,11 @@
       }
 
       function estimateWindowCount(pd) {
-        const base = { villa: 16, parcelhus: 14, rækkehus: 12, stuehus: 12, etagebolig: 8, kollegium: 6 }[pd?.buildingType] ?? 12;
-        if (pd?.buildingType === 'etagebolig' || pd?.buildingType === 'kollegium') return base;
-        const areaFactor = Math.min(1.5, Math.max(0.7, (pd?.areaM2 || 80) / 100));
-        const floorBonus = Math.max(0, ((pd?.floors || 1) - 1)) * 4;
+        var bt = pd && pd.buildingType;
+        const base = { villa: 16, parcelhus: 14, rækkehus: 12, stuehus: 12, etagebolig: 8, kollegium: 6 }[bt] || 12;
+        if (bt === 'etagebolig' || bt === 'kollegium') return base;
+        const areaFactor = Math.min(1.5, Math.max(0.7, ((pd && pd.areaM2) || 80) / 100));
+        const floorBonus = Math.max(0, (((pd && pd.floors) || 1) - 1)) * 4;
         return Math.round(base * areaFactor + floorBonus);
       }
 
@@ -336,20 +347,21 @@
         document.getElementById('window-val-villa').textContent = windowCount;
       });
 
-      document.getElementById('btn-back-2').addEventListener('click', () => showStep(1));
-      document.getElementById('btn-next-2').addEventListener('click', () => {
+      document.getElementById('btn-back-2').addEventListener('click', function() { showStep(1); });
+      document.getElementById('btn-next-2').addEventListener('click', function() {
         const villaSlider = document.getElementById('window-slider-villa');
         const aptSlider = document.getElementById('window-slider-apt');
         windowCount = document.getElementById('villa-fields').classList.contains('hidden')
           ? parseInt(aptSlider.value, 10)
           : parseInt(villaSlider.value, 10);
 
-        document.querySelectorAll('[name="window_count"]').forEach(el => el.removeAttribute('name'));
+        document.querySelectorAll('[name="window_count"]').forEach(function(el) { el.removeAttribute('name'); });
         (document.getElementById('villa-fields').classList.contains('hidden') ? aptSlider : villaSlider).setAttribute('name', 'window_count');
 
-        document.getElementById('services-list').innerHTML = includedServices.map(([key, svc]) => {
-          const checked = svc.default_selected ? ' checked' : '';
-          const reqCount = svc.requires_count ? ' data-requires-count="1"' : '';
+        document.getElementById('services-list').innerHTML = includedServices.map(function(entry) {
+          var key = entry[0], svc = entry[1];
+          var checked = svc.default_selected ? ' checked' : '';
+          var reqCount = svc.requires_count ? ' data-requires-count="1"' : '';
           return '<label class="service-card"><input type="checkbox" name="selected_services" value="' + key + '"' + checked + reqCount + ' class="sr-only"><div class="service-card-content"><span class="service-label text-base font-medium">' + (svc.label || key) + '</span><span class="service-check text-blue-600 text-xl font-bold">✓</span></div></label>';
         }).join('');
         document.getElementById('services-list').addEventListener('change', function(e) {
@@ -357,7 +369,9 @@
           updateLivePrice();
         });
 
-        document.getElementById('frequency-cards').innerHTML = freqOptions.map(f => '<label class="frequency-card"><input type="radio" name="frequency_radio" value="' + f.value + '"' + (f.value === 'one_time' ? ' checked' : '') + ' class="sr-only"><div class="flex justify-between items-center"><span class="text-base font-medium">' + f.label + '</span><span class="freq-check text-blue-600 text-xl font-bold">✓</span></div></label>').join('');
+        document.getElementById('frequency-cards').innerHTML = freqOptions.map(function(f) {
+          return '<label class="frequency-card"><input type="radio" name="frequency_radio" value="' + f.value + '"' + (f.value === 'one_time' ? ' checked' : '') + ' class="sr-only"><div class="flex justify-between items-center"><span class="text-base font-medium">' + f.label + '</span><span class="freq-check text-blue-600 text-xl font-bold">✓</span></div></label>';
+        }).join('');
         document.getElementById('frequency').value = 'one_time';
         document.getElementById('frequency-cards').addEventListener('change', function(e) {
           document.getElementById('frequency').value = e.target.value;
@@ -385,14 +399,14 @@
         doShowStep2();
       });
 
-      document.getElementById('btn-back-3').addEventListener('click', () => showStep(2));
-      document.getElementById('btn-next-3').addEventListener('click', () => showStep(4));
+      document.getElementById('btn-back-3').addEventListener('click', function() { showStep(2); });
+      document.getElementById('btn-next-3').addEventListener('click', function() { showStep(4); });
 
-      document.getElementById('btn-back-4').addEventListener('click', () => showStep(3));
+      document.getElementById('btn-back-4').addEventListener('click', function() { showStep(3); });
 
       function getSelectedServices() {
         const obj = {};
-        document.querySelectorAll('input[name="selected_services"]:checked').forEach(cb => {
+        document.querySelectorAll('input[name="selected_services"]:checked').forEach(function(cb) {
           if (cb.dataset.requiresCount) {
             obj[cb.value] = { count: parseInt(document.getElementById('tagvinduer_count').value, 10) || 1 };
           } else {
@@ -408,7 +422,7 @@
         const sel = getSelectedServices();
         const price = calculatePrice(windowCount, sel, freq);
         const el = document.getElementById('live-price');
-        if (el) el.textContent = price !== null ? price + ' kr.' : '–';
+        if (el) el.textContent = price !== null ? price + ' kr.' : '-';
       }
 
       function calculatePrice(windows, selectedServices, frequency) {
@@ -418,7 +432,7 @@
         const discountPct = Number(discounts[frequency]) || 0;
 
         let base = windows * pricePerWindow;
-        const floors = propertyData?.floors ?? 1;
+        const floors = (propertyData && propertyData.floors) != null ? propertyData.floors : 1;
         if (floors > 1) base += Math.round(base * secondFloorPct);
 
         let surcharges = 0;
@@ -439,7 +453,8 @@
         return Math.max(minPrice, subtotal - discount);
       }
 
-      document.getElementById('tagvinduer_count')?.addEventListener('input', updateLivePrice);
+      var tagEl = document.getElementById('tagvinduer_count');
+      if (tagEl) tagEl.addEventListener('input', updateLivePrice);
     })();
   </script>
 </body>

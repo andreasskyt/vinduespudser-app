@@ -7,6 +7,25 @@ const { renderTemplate, normalizeAddress } = require('../utils/templateRenderer'
 const { sendQuoteToCustomer, sendQuoteToFirm } = require('../services/EmailService');
 const { sendWebhook } = require('../utils/webhook');
 const { getDistanceKm } = require('../utils/geoDistance');
+const { getAddressSuggestions } = require('../services/PropertyDataService');
+
+/** GET /api/address-suggestions?q=xxx – DAWA autocomplete proxy (undgår CORS) */
+router.get('/api/address-suggestions', async (req, res, next) => {
+  try {
+    const q = req.query.q?.trim();
+    if (!q || q.length < 3) {
+      return res.json([]);
+    }
+    const items = await getAddressSuggestions(q);
+    if (items.length === 0) {
+      return res.json([]);
+    }
+    res.json(items.map((item) => ({ type: 'adgangsadresse', data: { id: item.id }, tekst: item.tekst, forslagstekst: item.tekst })));
+  } catch (err) {
+    next(err);
+  }
+});
+
 /** GET /api/property-data?addressId=xxx – hent BBR-ejendomsdata (AJAX) */
 router.get('/api/property-data', async (req, res, next) => {
   try {
