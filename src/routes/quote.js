@@ -6,6 +6,7 @@ const { assembleQuote } = require('../services/QuoteService');
 const { renderTemplate, normalizeAddress } = require('../utils/templateRenderer');
 const { sendQuoteToCustomer, sendQuoteToFirm } = require('../services/EmailService');
 const { sendWebhook } = require('../utils/webhook');
+const { getDistanceKm } = require('../utils/geoDistance');
 /** GET /api/property-data?addressId=xxx – hent BBR-ejendomsdata (AJAX) */
 router.get('/api/property-data', async (req, res, next) => {
   try {
@@ -96,6 +97,25 @@ router.post('/:slug/submit', async (req, res, next) => {
 
     if (!propertyData) {
       propertyData = { buildingType: 'parcelhus', areaM2: 100, floors: 1, builtYear: null };
+    }
+
+    if (tenant.service_area?.radius_km && propertyData?.coordinates) {
+      const { center_lat, center_lng, radius_km } = tenant.service_area;
+      const { lat, lng } = propertyData.coordinates;
+      if (
+        center_lat != null &&
+        center_lng != null &&
+        lat != null &&
+        lng != null
+      ) {
+        const distance = getDistanceKm(center_lat, center_lng, lat, lng);
+        if (distance > radius_km) {
+          return res.status(400).render('error', {
+            title: 'Uden for serviceområde',
+            message: `${tenant.name} tilbyder desværre kun vinduespudsning inden for ${radius_km} km fra ${tenant.service_area.center_address || 'deres base'}. Din adresse er ca. ${Math.round(distance)} km væk.`,
+          });
+        }
+      }
     }
 
     const windowCount =

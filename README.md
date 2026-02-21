@@ -22,7 +22,7 @@ Multi-tenant SaaS til danske vinduespudserfirmaer. Appen genererer automatiske p
 
 1. Kopiér `.env.example` til `.env` og udfyld værdier
 2. `npm install`
-3. Kør Supabase-migrationer: `001_initial_schema.sql` og `002_quote_details.sql` i Supabase Dashboard
+3. Kør Supabase-migrationer: `001_initial_schema.sql`, `002_quote_details.sql` og `003_tenant_location.sql` i Supabase Dashboard
 4. `npm run dev` eller `npm start`
 
 ## Admin API
@@ -69,6 +69,16 @@ Obligatoriske felter: `slug`, `name`, `contact_email`, `pricing`, `quote_templat
 
 **Valgfri webhook**: `webhook_url` – URL som modtager POST med lead og tilbudsdata ved nyt tilbud.
 
+**Serviceområde (valgfrit)**: `service_area` – begræns tilbud til adresser inden for en radius:
+```json
+{
+  "center_address": "Søndergade 10, 8000 Aarhus C",
+  "center_lat": 56.1572,
+  "center_lng": 10.2107,
+  "radius_km": 40
+}
+```
+
 **Eksempel – opret tenant med curl:**
 ```bash
 curl -X POST http://localhost:3000/admin/tenants \
@@ -79,6 +89,12 @@ curl -X POST http://localhost:3000/admin/tenants \
     "name": "Mit Vinduespudser",
     "contact_email": "info@mitfirma.dk",
     "webhook_url": "https://mit-crm.dk/webhooks/leads",
+    "service_area": {
+      "center_address": "Søndergade 10, 8000 Aarhus C",
+      "center_lat": 56.1572,
+      "center_lng": 10.2107,
+      "radius_km": 40
+    },
     "pricing": { "min_price": 399, "price_per_window": 45 },
     "quote_template": "Kære {{customer_name}}, tilbud for {{address}}: {{price}} kr."
   }'

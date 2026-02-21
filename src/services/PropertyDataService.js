@@ -154,11 +154,20 @@ async function getPropertyData(addressOrId) {
     if (!adgangsadresseId) return null;
   }
   try {
+    const adgang = await getAdgangsadresse(adgangsadresseId);
+    const coords = adgang?.adgangspunkt?.koordinater;
+    const coordinates =
+      Array.isArray(coords) && coords.length >= 2
+        ? { lat: coords[1], lng: coords[0] }
+        : null;
+
     const bbr = await getBBRPropertyData(adgangsadresseId);
     if (bbr) {
-      return { normalized: bbr.normalized, rawBBR: bbr.raw };
+      return {
+        normalized: { ...bbr.normalized, coordinates },
+        rawBBR: bbr.raw,
+      };
     }
-    const adgang = await getAdgangsadresse(adgangsadresseId);
     const area = adgang?.etageareal ?? 80;
     return {
       normalized: {
@@ -166,6 +175,7 @@ async function getPropertyData(addressOrId) {
         areaM2: Number(area) || 80,
         floors: 1,
         builtYear: null,
+        coordinates,
       },
       rawBBR: null,
     };

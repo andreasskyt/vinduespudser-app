@@ -155,9 +155,32 @@
     </form>
   </div>
 
+  <div id="out-of-area-overlay" class="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-30 hidden">
+    <div class="bg-white rounded-xl shadow-xl p-6 max-w-md w-full">
+      <h2 class="text-lg font-semibold text-slate-800 mb-2">Uden for serviceområde</h2>
+      <p id="out-of-area-message" class="text-slate-600 text-base mb-6"></p>
+      <div class="flex flex-col gap-3">
+        <button type="button" id="out-of-area-back" class="w-full min-h-[48px] py-3 bg-slate-800 text-white font-medium rounded-xl">Vælg anden adresse</button>
+        <button type="button" id="out-of-area-continue" class="w-full min-h-[48px] py-3 border border-slate-300 text-slate-700 font-medium rounded-xl">Fortsæt alligevel</button>
+      </div>
+    </div>
+  </div>
+
   <script>
     (function() {
       const pricing = <%- JSON.stringify(tenant.pricing || {}) %>;
+      const serviceArea = <%- JSON.stringify(tenant.service_area || null) %>;
+      const tenantName = <%- JSON.stringify(tenant.name) %>;
+
+      function getDistanceKm(lat1, lng1, lat2, lng2) {
+        var R = 6371;
+        var dLat = (lat2 - lat1) * Math.PI / 180;
+        var dLng = (lng2 - lng1) * Math.PI / 180;
+        var a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+          Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+          Math.sin(dLng/2) * Math.sin(dLng/2);
+        return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      }
       const services = pricing.services || {};
       const includedServices = Object.entries(services).filter(([, s]) => s && s.included === true);
       const discounts = pricing.frequency_discounts || { one_time: 0, quarterly: 0.05, monthly: 0.1 };
@@ -258,6 +281,22 @@
         btnNext1.textContent = 'Næste';
         btnNext1.disabled = false;
 
+        var coords = propertyData && propertyData.coordinates;
+        if (serviceArea && serviceArea.radius_km && coords && coords.lat != null && coords.lng != null &&
+            serviceArea.center_lat != null && serviceArea.center_lng != null) {
+          var dist = getDistanceKm(serviceArea.center_lat, serviceArea.center_lng, coords.lat, coords.lng);
+          if (dist > serviceArea.radius_km) {
+            var centerAddr = serviceArea.center_address || 'vores base';
+            document.getElementById('out-of-area-message').textContent = tenantName + ' tilbyder vinduespudsning inden for ' + serviceArea.radius_km + ' km fra ' + centerAddr + '. Din adresse er ca. ' + Math.round(dist) + ' km væk. Du kan vælge en anden adresse eller fortsætte alligevel.';
+            document.getElementById('out-of-area-overlay').classList.remove('hidden');
+            return;
+          }
+        }
+
+        doShowStep2();
+      }
+
+      function doShowStep2() {
         const typeLabels = { villa: 'Villa', parcelhus: 'Parcelhus', rækkehus: 'Rækkehus', stuehus: 'Stuehus', etagebolig: 'Lejlighed', kollegium: 'Kollegium' };
         document.getElementById('bbr-info').innerHTML = [
           '<strong>Bygningstype:</strong> ' + (typeLabels[propertyData.buildingType] || propertyData.buildingType),
@@ -278,7 +317,7 @@
         document.getElementById('window-val-villa').textContent = est;
 
         showStep(2);
-      });
+      }
 
       function estimateWindowCount(pd) {
         const base = { villa: 16, parcelhus: 14, rækkehus: 12, stuehus: 12, etagebolig: 8, kollegium: 6 }[pd?.buildingType] ?? 12;
@@ -330,6 +369,20 @@
         tagDiv.classList.toggle('hidden', !(tagCb && tagCb.checked));
 
         showStep(3);
+      });
+
+      document.getElementById('out-of-area-back').addEventListener('click', function() {
+        document.getElementById('out-of-area-overlay').classList.add('hidden');
+        addrInput.value = '';
+        idInput.value = '';
+        addrRawInput.value = '';
+        btnNext1.disabled = true;
+        btnNext1.classList.add('bg-slate-300', 'text-slate-500', 'cursor-not-allowed');
+        btnNext1.classList.remove('bg-slate-800', 'text-white');
+      });
+      document.getElementById('out-of-area-continue').addEventListener('click', function() {
+        document.getElementById('out-of-area-overlay').classList.add('hidden');
+        doShowStep2();
       });
 
       document.getElementById('btn-back-3').addEventListener('click', () => showStep(2));

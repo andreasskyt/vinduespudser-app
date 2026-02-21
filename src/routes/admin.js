@@ -30,7 +30,7 @@ router.get('/tenants', async (req, res, next) => {
 /** POST /admin/tenants – opret tenant */
 router.post('/tenants', async (req, res, next) => {
   try {
-    const { slug, name, contact_email, webhook_url, pricing, quote_template } = req.body || {};
+    const { slug, name, contact_email, webhook_url, service_area, pricing, quote_template } = req.body || {};
     if (!slug?.trim() || !name?.trim() || !contact_email?.trim()) {
       return res.status(400).json({
         error: 'Manglende felter: slug, name og contact_email er påkrævet',
@@ -67,6 +67,7 @@ router.post('/tenants', async (req, res, next) => {
       name: name.trim(),
       contact_email: contact_email.trim(),
       webhook_url: webhook_url?.trim() || null,
+      service_area: service_area && typeof service_area === 'object' ? service_area : null,
       pricing: { ...defaultPricing, ...pricing },
       quote_template: quote_template.trim(),
       active: true,
@@ -88,7 +89,7 @@ router.patch('/tenants/:id', async (req, res, next) => {
       return res.status(404).json({ error: 'Tenant findes ikke' });
     }
 
-    const allowed = ['name', 'contact_email', 'webhook_url', 'pricing', 'quote_template', 'active', 'slug'];
+    const allowed = ['name', 'contact_email', 'webhook_url', 'service_area', 'pricing', 'quote_template', 'active', 'slug'];
     const updates = {};
     for (const key of allowed) {
       if (req.body[key] !== undefined) {
@@ -100,6 +101,9 @@ router.patch('/tenants/:id', async (req, res, next) => {
     }
     if (updates.pricing && typeof updates.pricing !== 'object') {
       delete updates.pricing;
+    }
+    if (updates.service_area !== undefined && updates.service_area !== null && typeof updates.service_area !== 'object') {
+      delete updates.service_area;
     }
 
     const updated = await updateTenant(req.params.id, updates);
